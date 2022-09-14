@@ -9,8 +9,9 @@ use esp32c3_hal::{
     pac::Peripherals,
     prelude::*,
     Delay,
-    RtcCntl,
-    Timer,
+    Rtc,
+    timer::TimerGroup,
+    clock::{ClockControl, CpuClock},
     UsbSerialJtag,
 };
 use icm42670::{prelude::*, Address, Icm42670};
@@ -20,16 +21,20 @@ use riscv_rt::entry;
 #[entry]
 fn main() -> ! {
     let mut peripherals = Peripherals::take().unwrap();
+    let mut system = peripherals.SYSTEM.split();
+    let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock160MHz).freeze();
 
-    let mut delay = Delay::new(peripherals.SYSTIMER);
-    let mut rtc_cntl = RtcCntl::new(peripherals.RTC_CNTL);
-    let mut timer0 = Timer::new(peripherals.TIMG0);
-    let mut timer1 = Timer::new(peripherals.TIMG1);
+    let mut delay = Delay::new(&clocks);
+    let mut rtc = Rtc::new(peripherals.RTC_CNTL);
+    let timer_group0 = TimerGroup::new(peripherals.TIMG0, &clocks);
+    let mut wdt0 = timer_group0.wdt;
+    let timer_group1 = TimerGroup::new(peripherals.TIMG1, &clocks);
+    let mut wdt1 = timer_group1.wdt;
 
-    rtc_cntl.set_super_wdt_enable(false);
-    rtc_cntl.set_wdt_enable(false);
-    timer0.disable();
-    timer1.disable();
+    rtc.swd.disable();
+    rtc.rwdt.disable();
+    wdt0.disable();
+    wdt1.disable();
 
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
@@ -37,8 +42,9 @@ fn main() -> ! {
         peripherals.I2C0,
         io.pins.gpio10,
         io.pins.gpio8,
-        400_000,
-        &mut peripherals.SYSTEM,
+        400u32.kHz(),
+        &mut system.peripheral_clock_control,
+        &clocks,
     )
     .unwrap();
 
