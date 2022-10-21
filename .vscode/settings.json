@@ -1,4 +1,5 @@
 {
-    "editor.formatOnSave": true,
-    "rust-analyzer.checkOnSave.allTargets": false,
+  "editor.formatOnSave": true,
+  "rust-analyzer.checkOnSave.allTargets": false,
+  "rust-analyzer.diagnostics.disabled": ["unresolved-proc-macro"]
 }

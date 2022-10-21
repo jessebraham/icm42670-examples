@@ -4,27 +4,25 @@
 use core::fmt::Write;
 
 use esp32c3_hal::{
+    clock::ClockControl,
     gpio::IO,
     i2c::I2C,
     pac::Peripherals,
     prelude::*,
+    timer::TimerGroup,
     Delay,
     Rtc,
-    timer::TimerGroup,
-    clock::{ClockControl, CpuClock},
     UsbSerialJtag,
 };
+use esp_backtrace as _;
 use icm42670::{prelude::*, Address, Icm42670};
-use panic_halt as _;
-use riscv_rt::entry;
 
-#[entry]
+#[riscv_rt::entry]
 fn main() -> ! {
-    let mut peripherals = Peripherals::take().unwrap();
+    let peripherals = Peripherals::take().unwrap();
     let mut system = peripherals.SYSTEM.split();
-    let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock160MHz).freeze();
+    let clocks = ClockControl::boot_defaults(system.clock_control).freeze();
 
-    let mut delay = Delay::new(&clocks);
     let mut rtc = Rtc::new(peripherals.RTC_CNTL);
     let timer_group0 = TimerGroup::new(peripherals.TIMG0, &clocks);
     let mut wdt0 = timer_group0.wdt;
@@ -36,6 +34,7 @@ fn main() -> ! {
     wdt0.disable();
     wdt1.disable();
 
+    let mut delay = Delay::new(&clocks);
     let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
 
     let i2c = I2C::new(
