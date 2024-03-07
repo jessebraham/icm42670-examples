@@ -7,23 +7,28 @@ use esp32c3_hal::{
     clock::ClockControl,
     gpio::IO,
     i2c::I2C,
-    pac::Peripherals,
+    peripherals::Peripherals,
     prelude::*,
     timer::TimerGroup,
     Delay,
     Rtc,
-    UsbSerialJtag,
+    UsbSerialJtag
 };
 use esp_backtrace as _;
 use icm42670::{prelude::*, Address, Icm42670};
 
-#[riscv_rt::entry]
+#[entry]
 fn main() -> ! {
-    let peripherals = Peripherals::take().unwrap();
+    
+
+    let peripherals = Peripherals::take();
+    let mut rtc = Rtc::new(peripherals.LPWR);
+
     let mut system = peripherals.SYSTEM.split();
     let clocks = ClockControl::boot_defaults(system.clock_control).freeze();
 
-    let mut rtc = Rtc::new(peripherals.RTC_CNTL);
+    let mut usb_serial = UsbSerialJtag::new(peripherals.USB_DEVICE);
+
     let timer_group0 = TimerGroup::new(peripherals.TIMG0, &clocks);
     let mut wdt0 = timer_group0.wdt;
     let timer_group1 = TimerGroup::new(peripherals.TIMG1, &clocks);
@@ -42,10 +47,8 @@ fn main() -> ! {
         io.pins.gpio10,
         io.pins.gpio8,
         400u32.kHz(),
-        &mut system.peripheral_clock_control,
         &clocks,
-    )
-    .unwrap();
+    );
 
     let mut icm = Icm42670::new(i2c, Address::Primary).unwrap();
 
@@ -54,7 +57,7 @@ fn main() -> ! {
         let gyro_norm = icm.gyro_norm().unwrap();
 
         writeln!(
-            UsbSerialJtag,
+            usb_serial,
             "ACCEL  =  X: {:+.04} Y: {:+.04} Z: {:+.04}\t\tGYRO  =  X: {:+.04} Y: {:+.04} Z: {:+.04}",
             accel_norm.x, accel_norm.y, accel_norm.z, gyro_norm.x, gyro_norm.y, gyro_norm.z
         )
