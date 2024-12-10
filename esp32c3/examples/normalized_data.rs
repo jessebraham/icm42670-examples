@@ -1,54 +1,30 @@
 #![no_std]
 #![no_main]
 
-use core::fmt::Write;
-
-use esp32c3_hal::{
-    clock::ClockControl,
-    gpio::IO,
-    i2c::I2C,
-    peripherals::Peripherals,
+use esp_hal::{
+    delay::Delay,
     prelude::*,
-    timer::TimerGroup,
-    Delay,
-    Rtc,
-    UsbSerialJtag
+    clock::{CpuClock},
+    i2c::master::I2c,
 };
+
 use esp_backtrace as _;
+use esp_println::println;
 use icm42670::{prelude::*, Address, Icm42670};
 
 #[entry]
 fn main() -> ! {
-    
+    let peripherals = esp_hal::init({
+        let mut config = esp_hal::Config::default();
+        config.cpu_clock = CpuClock::Clock160MHz;
+        config
+    });
 
-    let peripherals = Peripherals::take();
-    let mut rtc = Rtc::new(peripherals.LPWR);
+    let delay = Delay::new();
 
-    let mut system = peripherals.SYSTEM.split();
-    let clocks = ClockControl::boot_defaults(system.clock_control).freeze();
-
-    let mut usb_serial = UsbSerialJtag::new(peripherals.USB_DEVICE);
-
-    let timer_group0 = TimerGroup::new(peripherals.TIMG0, &clocks);
-    let mut wdt0 = timer_group0.wdt;
-    let timer_group1 = TimerGroup::new(peripherals.TIMG1, &clocks);
-    let mut wdt1 = timer_group1.wdt;
-
-    rtc.swd.disable();
-    rtc.rwdt.disable();
-    wdt0.disable();
-    wdt1.disable();
-
-    let mut delay = Delay::new(&clocks);
-    let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
-
-    let i2c = I2C::new(
-        peripherals.I2C0,
-        io.pins.gpio10,
-        io.pins.gpio8,
-        400u32.kHz(),
-        &clocks,
-    );
+    let i2c = I2c::new(peripherals.I2C0, esp_hal::i2c::master::Config::default())
+        .with_sda(peripherals.GPIO10)
+        .with_scl(peripherals.GPIO8);
 
     let mut icm = Icm42670::new(i2c, Address::Primary).unwrap();
 
@@ -56,13 +32,11 @@ fn main() -> ! {
         let accel_norm = icm.accel_norm().unwrap();
         let gyro_norm = icm.gyro_norm().unwrap();
 
-        writeln!(
-            usb_serial,
+        println!(
             "ACCEL  =  X: {:+.04} Y: {:+.04} Z: {:+.04}\t\tGYRO  =  X: {:+.04} Y: {:+.04} Z: {:+.04}",
             accel_norm.x, accel_norm.y, accel_norm.z, gyro_norm.x, gyro_norm.y, gyro_norm.z
-        )
-        .ok();
+        );
 
-        delay.delay_ms(100u32);
+        delay.delay_millis(1_000u32);
     }
 }
